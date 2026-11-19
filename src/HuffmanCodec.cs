@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 
 namespace TelemetryLink
@@ -18,6 +19,46 @@ namespace TelemetryLink
             public int CompareTo(Node other)
             {
                 return Frequency.CompareTo(other.Frequency);
+            }
+        }
+
+        public byte[] Compress(byte[] data)
+        {
+            if (data == null || data.Length == 0) return Array.Empty<byte>();
+
+            var frequencies = new Dictionary<byte, int>();
+            foreach (byte b in data)
+            {
+                if (!frequencies.ContainsKey(b)) frequencies[b] = 0;
+                frequencies[b]++;
+            }
+
+            Node root = BuildTree(frequencies);
+            var codes = new Dictionary<byte, List<bool>>();
+            GenerateCodes(root, new List<bool>(), codes);
+
+            List<bool> encodedBits = new List<bool>();
+            foreach (byte b in data)
+            {
+                encodedBits.AddRange(codes[b]);
+            }
+
+            using (MemoryStream ms = new MemoryStream())
+            using (BinaryWriter writer = new BinaryWriter(ms))
+            {
+                writer.Write(data.Length);
+                writer.Write((ushort)frequencies.Count);
+                foreach (var kvp in frequencies)
+                {
+                    writer.Write(kvp.Key);
+                    writer.Write(kvp.Value);
+                }
+
+                byte[] packedBytes = PackBits(encodedBits);
+                writer.Write(packedBytes.Length);
+                writer.Write(packedBytes);
+
+                return ms.ToArray();
             }
         }
 
