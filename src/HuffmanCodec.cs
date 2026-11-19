@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -59,6 +60,53 @@ namespace TelemetryLink
                 writer.Write(packedBytes);
 
                 return ms.ToArray();
+            }
+        }
+
+        public byte[] Decompress(byte[] compressedData)
+        {
+            if (compressedData == null || compressedData.Length == 0) return Array.Empty<byte>();
+
+            using (MemoryStream ms = new MemoryStream(compressedData))
+            using (BinaryReader reader = new BinaryReader(ms))
+            {
+                int originalLength = reader.ReadInt32();
+                ushort dictCount = reader.ReadUInt16();
+
+                var frequencies = new Dictionary<byte, int>();
+                for (int i = 0; i < dictCount; i++)
+                {
+                    byte symbol = reader.ReadByte();
+                    int freq = reader.ReadInt32();
+                    frequencies[symbol] = freq;
+                }
+
+                int packedLength = reader.ReadInt32();
+                byte[] packedBytes = reader.ReadBytes(packedLength);
+
+                Node root = BuildTree(frequencies);
+                List<byte> decoded = new List<byte>(originalLength);
+
+                if (root.IsLeaf)
+                {
+                    for (int i = 0; i < originalLength; i++) decoded.Add(root.Symbol);
+                    return decoded.ToArray();
+                }
+
+                Node current = root;
+                BitArray bits = new BitArray(packedBytes);
+
+                for (int i = 0; i < bits.Length && decoded.Count < originalLength; i++)
+                {
+                    current = bits[i] ? current.Right : current.Left;
+                    if (current.IsLeaf)
+                    {
+                        decoded.Add(current.Symbol);
+                        current = root;
+                    }
+                }
+
+                return decoded.ToArray();
             }
         }
 
