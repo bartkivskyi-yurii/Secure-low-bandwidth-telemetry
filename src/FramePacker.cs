@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 
 namespace TelemetryLink
@@ -56,6 +57,51 @@ namespace TelemetryLink
 
             selectedFrames.Reverse();
             return selectedFrames;
+        }
+
+        public byte[] SerializePacket(List<TelemetryFrame> frames)
+        {
+            using (MemoryStream ms = new MemoryStream())
+            using (BinaryWriter writer = new BinaryWriter(ms))
+            {
+                writer.Write(frames.Count);
+                foreach (var frame in frames)
+                {
+                    writer.Write(frame.Id);
+                    writer.Write(frame.Type ?? string.Empty);
+                    writer.Write(frame.Priority);
+                    writer.Write(frame.CompressedData.Length);
+                    writer.Write(frame.CompressedData);
+                }
+                return ms.ToArray();
+            }
+        }
+
+        public List<TelemetryFrame> DeserializePacket(byte[] packetBytes)
+        {
+            List<TelemetryFrame> frames = new List<TelemetryFrame>();
+            using (MemoryStream ms = new MemoryStream(packetBytes))
+            using (BinaryReader reader = new BinaryReader(ms))
+            {
+                int count = reader.ReadInt32();
+                for (int i = 0; i < count; i++)
+                {
+                    int id = reader.ReadInt32();
+                    string type = reader.ReadString();
+                    int priority = reader.ReadInt32();
+                    int dataLen = reader.ReadInt32();
+                    byte[] compData = reader.ReadBytes(dataLen);
+
+                    frames.Add(new TelemetryFrame
+                    {
+                        Id = id,
+                        Type = type,
+                        Priority = priority,
+                        CompressedData = compData
+                    });
+                }
+            }
+            return frames;
         }
     }
 }
