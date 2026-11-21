@@ -103,5 +103,11 @@ namespace TelemetryLink
             }
             return frames;
         }
+
+        public double CalculateUtilization(List<TelemetryFrame> packed, int maxCapacity)
+        {
+            int totalSize = packed.Sum(f => f.Weight);
+            return Math.Round((double)totalSize / maxCapacity * 100, 2);
+        }
     }
 }
