@@ -161,5 +161,11 @@ namespace TelemetryLink
             }
             return bytes;
         }
+        
+        public double GetCompressionRatio(int originalSize, int compressedSize)
+        {
+            if (originalSize == 0) return 0;
+            return Math.Round((double)compressedSize / originalSize, 3);
+        }
     }
 }
