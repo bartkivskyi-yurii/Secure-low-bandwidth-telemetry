@@ -67,5 +67,14 @@ namespace TelemetryLink
                 }
             }
         }
+        public byte[] SimulateMitmAttack(byte[] packet)
+        {
+            byte[] tampered = (byte[])packet.Clone();
+            if (tampered.Length > 20)
+            {
+                tampered[20] ^= 0xFF;
+            }
+            return tampered;
+        }
     }
 }
