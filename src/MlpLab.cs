@@ -43,5 +43,13 @@ namespace TelemetryLink
             if (channelQualityScore > 0.35) return (int)(baseMaxCapacity * 0.65);
             return (int)(baseMaxCapacity * 0.35);
         }
+        
+        public void AdaptWeights(double learningRate, double error)
+        {
+            for (int j = 0; j < 3; j++)
+            {
+                _weightsHiddenOutput[j] += learningRate * error;
+            }
+        }
     }
 }
