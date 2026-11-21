@@ -23,42 +23,44 @@ namespace TelemetryLink
             }
         }
 
+        private readonly Node _sharedRoot;
+        private readonly Dictionary<byte, List<bool>> _sharedCodes;
+
+        public HuffmanCodec()
+        {
+            var baseFrequencies = new Dictionary<byte, int>();
+            for (int i = 0; i < 256; i++)
+            {
+                baseFrequencies[(byte)i] = 1;
+            }
+
+            string commonChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:;_-.% ";
+            foreach (char c in commonChars)
+            {
+                baseFrequencies[(byte)c] = 50;
+            }
+            baseFrequencies[0xAB] = 100;
+
+            _sharedRoot = BuildTree(baseFrequencies);
+            _sharedCodes = new Dictionary<byte, List<bool>>();
+            GenerateCodes(_sharedRoot, new List<bool>(), _sharedCodes);
+        }
+
         public byte[] Compress(byte[] data)
         {
             if (data == null || data.Length == 0) return Array.Empty<byte>();
 
-            var frequencies = new Dictionary<byte, int>();
-            foreach (byte b in data)
-            {
-                if (!frequencies.ContainsKey(b)) frequencies[b] = 0;
-                frequencies[b]++;
-            }
-
-            Node root = BuildTree(frequencies);
-            var codes = new Dictionary<byte, List<bool>>();
-            GenerateCodes(root, new List<bool>(), codes);
-
             List<bool> encodedBits = new List<bool>();
             foreach (byte b in data)
             {
-                encodedBits.AddRange(codes[b]);
+                encodedBits.AddRange(_sharedCodes[b]);
             }
 
             using (MemoryStream ms = new MemoryStream())
             using (BinaryWriter writer = new BinaryWriter(ms))
             {
-                writer.Write(data.Length);
-                writer.Write((ushort)frequencies.Count);
-                foreach (var kvp in frequencies)
-                {
-                    writer.Write(kvp.Key);
-                    writer.Write(kvp.Value);
-                }
-
-                byte[] packedBytes = PackBits(encodedBits);
-                writer.Write(packedBytes.Length);
-                writer.Write(packedBytes);
-
+                writer.Write((ushort)data.Length);
+                writer.Write(PackBits(encodedBits));
                 return ms.ToArray();
             }
         }
@@ -70,30 +72,11 @@ namespace TelemetryLink
             using (MemoryStream ms = new MemoryStream(compressedData))
             using (BinaryReader reader = new BinaryReader(ms))
             {
-                int originalLength = reader.ReadInt32();
-                ushort dictCount = reader.ReadUInt16();
+                ushort originalLength = reader.ReadUInt16();
+                byte[] packedBytes = reader.ReadBytes((int)(ms.Length - ms.Position));
 
-                var frequencies = new Dictionary<byte, int>();
-                for (int i = 0; i < dictCount; i++)
-                {
-                    byte symbol = reader.ReadByte();
-                    int freq = reader.ReadInt32();
-                    frequencies[symbol] = freq;
-                }
-
-                int packedLength = reader.ReadInt32();
-                byte[] packedBytes = reader.ReadBytes(packedLength);
-
-                Node root = BuildTree(frequencies);
                 List<byte> decoded = new List<byte>(originalLength);
-
-                if (root.IsLeaf)
-                {
-                    for (int i = 0; i < originalLength; i++) decoded.Add(root.Symbol);
-                    return decoded.ToArray();
-                }
-
-                Node current = root;
+                Node current = _sharedRoot;
                 BitArray bits = new BitArray(packedBytes);
 
                 for (int i = 0; i < bits.Length && decoded.Count < originalLength; i++)
@@ -102,7 +85,7 @@ namespace TelemetryLink
                     if (current.IsLeaf)
                     {
                         decoded.Add(current.Symbol);
-                        current = root;
+                        current = _sharedRoot;
                     }
                 }
 
@@ -161,7 +144,7 @@ namespace TelemetryLink
             }
             return bytes;
         }
-        
+
         public double GetCompressionRatio(int originalSize, int compressedSize)
         {
             if (originalSize == 0) return 0;
